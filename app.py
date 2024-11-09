@@ -17,6 +17,8 @@ from datetime import datetime
 from pymongo import MongoClient
 import time
 import pickle
+import pydeck as pdk
+
 
 if 'data' not in st.session_state:
     st.session_state['data'] = None
@@ -30,14 +32,31 @@ st.set_page_config(page_title="VINIRA Reservations Cancellation Predictions",
                    layout="wide",
                    initial_sidebar_state='expanded')
 
-st.markdown(
-    """
-    <div style="text-align: center; margin: 20px; background-color:rgb(34,193,195); padding: 20px;width:100%">
-        <h1>VINIRA Reservations Cancellation Predictions</h1>
-    </div>
-    """,
-    unsafe_allow_html=True
+st.markdown("""
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+""", unsafe_allow_html=True)
+coln1,coln2=st.columns([0.2, 3.8])
+with coln2:
+    st.markdown(
+        """
+        <div style="text-align: center; margin-top: 0px; background-color:#75450c; width:100%">
+            <h1>VINIRA Reservations Cancellation Predictions</h1>
+        </div>
+        """,
+        unsafe_allow_html=True
 )
+    
+with coln1:
+    st.image("vinira_logo.png",width=500,use_column_width="auto")
+# st.markdown(
+#     """
+#     <div style="text-align: center; margin: 20px; background-color:#75450c; padding: 20px;width:100%">
+#         <img src="vinira_logo.png" style="width: 100px; height: auto; margin-bottom: 15px;">
+#         <h1>VINIRA Reservations Cancellation Predictions</h1>
+#     </div>
+#     """,
+#     unsafe_allow_html=True
+# )
 
 # Load data from MongoDB
 @st.cache_data
@@ -95,62 +114,111 @@ def make_predictions(data):
 #     return model
 
 # model = load_model()
-coln1, coln2 = st.columns(2)
+# coln1, coln2 = st.columns(2)
 # df=None
 
 
+if st.button("Load the Customer Data"):
+    df = load_data()
+    st.session_state['data'] = df
+    st.dataframe(df, use_container_width=True)
 
+if st.button("Predict Cancellation Probability"):
+    if st.session_state['data'] is None:
+        st.error("Please load the customer data first!")
+    else:
+        predictions = make_predictions(st.session_state['data'])
+        if predictions is not None:
+            result_df = st.session_state['data'].copy()
+            result_df['Cancellation_Probability'] = predictions
+            # st.write('<i class="fa-solid fa-"/>', unsafe_allow_html=True)
+            st.markdown("""
+                <h4 style="display: flex; align-items: center;">
+                    Prediction Results
+                    <i class="fa-solid fa-square-poll-vertical" style="margin-left: 10px; color: #007bff;"></i>
+                </h4>
+            """, unsafe_allow_html=True)
+            st.dataframe(result_df[['Cancellation_Probability']], use_container_width=True)
+        import seaborn as sns
 
-with coln1:
-    if st.button("Load the Customer Data"):
-        df = load_data()
-        st.session_state['data'] = df
-        
-        # Display the data
-        st.dataframe(df, use_container_width=True)
-        st.markdown("</div>", unsafe_allow_html=True)
-        
-with coln2:
-    if st.button("Predict Cancellation Probability"):
-        if st.session_state['data'] is None:
-            st.error("Please load the customer data first!")
-        else:
-            # Make predictions
-            predictions = make_predictions(st.session_state['data'])
+        if st.session_state['data'] is not None and predictions is not None:
+            def categorize_probability(prob):
+                if prob > 0.7:
+                    return "High Probability of Cancellation"
+                elif prob > 0.3:
+                    return "Medium Probability of Cancellation"
+                else:
+                    return "Low Probability of Cancellation"
+            result_df['Cancellation_Category'] = result_df['Cancellation_Probability'].apply(categorize_probability)
+
+            cancellation_df = result_df[['Cancellation_Probability', 'Cancellation_Category']]
             
-            if predictions is not None:
-                # Add predictions to the dataframe
-                result_df = st.session_state['data'].copy()
-                result_df['Cancellation_Probability'] = predictions
+            # Actionable Insights
+            high_cancellations = result_df[result_df['Cancellation_Category'] == "High Probability of Cancellation"]
+            medium_cancellations = result_df[result_df['Cancellation_Category'] == "Medium Probability of Cancellation"]
+            low_cancellations = result_df[result_df['Cancellation_Category'] == "Low Probability of Cancellation"]
+            
+            st.markdown("""
+                <h4 style="display: flex; align-items: center;">
+                    Actionable insights
+                    <i class="fas fa-lightbulb" style="margin-left: 10px; color: #007bff;"></i>
+                </h4>
+            """, unsafe_allow_html=True)
+            st.write(f"- **High Probability of Cancellations ({len(high_cancellations)} reservations)**: Consider reaching out to these customers for confirmation or offering incentives to encourage them to honor their booking.")
+            st.write(f"- **Medium Probability of Cancellations ({len(medium_cancellations)} reservations)**: Consider offering these customers flexible rebooking options to increase retention.")
+            st.write(f"- **Low Probability of Cancellations ({len(low_cancellations)} reservations)**: These customers are less likely to cancel, so no immediate action may be required.")
+
+
+# with coln1:
+#     if st.button("Load the Customer Data"):
+#         df = load_data()
+#         st.session_state['data'] = df
+        
+#         # Display the data
+#         st.dataframe(df, use_container_width=True)
+#         st.markdown("</div>", unsafe_allow_html=True)
+        
+# with coln2:
+#     if st.button("Predict Cancellation Probability"):
+#         if st.session_state['data'] is None:
+#             st.error("Please load the customer data first!")
+#         else:
+#             # Make predictions
+#             predictions = make_predictions(st.session_state['data'])
+            
+#             if predictions is not None:
+#                 # Add predictions to the dataframe
+#                 result_df = st.session_state['data'].copy()
+#                 result_df['Cancellation_Probability'] = predictions
                 
-                # Display results
-                st.write("### Prediction Results")
-                st.dataframe(
-                    result_df[['Cancellation_Probability']],
-                    use_container_width=True
-                )
+#                 # Display results
+#                 st.write("### Prediction Results")
+#                 st.dataframe(
+#                     result_df[['Cancellation_Probability']],
+#                     use_container_width=True
+#                 )
                 
-                # Display summary statistics
-                # st.write("### Summary Statistics")
-                # st.write(f"Average Cancellation Probability: {predictions.mean():.2%}")
-                # st.write(f"Number of High-Risk Bookings (>50% probability): {(predictions > 0.5).sum()}")
+#                 # Display summary statistics
+#                 # st.write("### Summary Statistics")
+#                 # st.write(f"Average Cancellation Probability: {predictions.mean():.2%}")
+#                 # st.write(f"Number of High-Risk Bookings (>50% probability): {(predictions > 0.5).sum()}")
                 
-                # # Optional: Create a histogram of probabilities
-                # fig, ax = plt.subplots()
-                # ax.hist(predictions, bins=20)
-                # ax.set_xlabel('Cancellation Probability')
-                # ax.set_ylabel('Count')
-                # ax.set_title('Distribution of Cancellation Probabilities')
-                # st.pyplot(fig)
+#                 # # Optional: Create a histogram of probabilities
+#                 # fig, ax = plt.subplots()
+#                 # ax.hist(predictions, bins=20)
+#                 # ax.set_xlabel('Cancellation Probability')
+#                 # ax.set_ylabel('Count')
+#                 # ax.set_title('Distribution of Cancellation Probabilities')
+#                 # st.pyplot(fig)
                 
-        st.markdown("</div>", unsafe_allow_html=True)
+#         st.markdown("</div>", unsafe_allow_html=True)
 # Add some custom CSS for styling (optional)
 st.markdown(
     """
     <style>
     .stButton > button {
         width:100%;
-        background-color: #090979;
+        background-color: #04343c;
         color: white;
         margin: 20px;
         font-size: 20px;
